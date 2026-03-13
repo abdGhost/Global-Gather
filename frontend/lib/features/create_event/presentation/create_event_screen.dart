@@ -1,11 +1,19 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 
+import '../../../core/api/endpoints.dart';
 import '../../../core/responsive/responsive.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/timezone_service.dart';
+import '../../../core/utils/picked_image_provider.dart';
+import '../../../providers/api_client_provider.dart';
+import '../../../providers/nearby_events_provider.dart';
+import '../../../providers/search_events_provider.dart';
+import '../../../providers/trending_events_provider.dart';
 
 class CreateEventScreen extends ConsumerStatefulWidget {
   const CreateEventScreen({super.key});
@@ -29,18 +37,114 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
   ];
   DateTime? _startAt;
   DateTime? _endAt;
+  final _titleController = TextEditingController();
+  final _descriptionController = TextEditingController();
   final _startController = TextEditingController();
   final _endController = TextEditingController();
   final _locationController = TextEditingController();
   final _imagePicker = ImagePicker();
   XFile? _pickedBanner;
+  double? _pickedLat;
+  double? _pickedLng;
+  bool _isSubmitting = false;
 
   @override
   void dispose() {
+    _titleController.dispose();
+    _descriptionController.dispose();
     _startController.dispose();
     _endController.dispose();
     _locationController.dispose();
     super.dispose();
+  }
+
+  Future<void> _submitCreate() async {
+    if (!(_formKey.currentState?.validate() ?? false)) return;
+    if (_startAt == null || _endAt == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please set start and end date & time')),
+      );
+      return;
+    }
+    if (_endAt!.isBefore(_startAt!)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('End must be after start')),
+      );
+      return;
+    }
+    setState(() => _isSubmitting = true);
+    final dio = ref.read(apiClientProvider);
+    // Use UTC suffix Python accepts (Python <3.11 may not parse "Z").
+    final startIso = _startAt!.toUtc().toIso8601String().replaceFirst('Z', '+00:00');
+    final endIso = _endAt!.toUtc().toIso8601String().replaceFirst('Z', '+00:00');
+    // Backend limits timezone to 64 chars; to avoid validation issues,
+    // we normalise to a short, valid identifier.
+    const tz = 'UTC';
+    final payload = <String, dynamic>{
+      'title': _titleController.text.trim(),
+      'start_local': startIso,
+      'end_local': endIso,
+      'timezone': tz,
+      'is_virtual': _isVirtual,
+    };
+    final desc = _descriptionController.text.trim();
+    if (desc.isNotEmpty) payload['description'] = desc;
+    if (_pickedLat != null) payload['lat'] = _pickedLat;
+    if (_pickedLng != null) payload['lng'] = _pickedLng;
+    final address = _locationController.text.trim();
+    if (address.isNotEmpty) payload['address'] = address;
+    if (_selectedCategory != null && _selectedCategory!.isNotEmpty) {
+      payload['category'] = _selectedCategory;
+    }
+    if (_maxAttendees < 1000) payload['max_attendees'] = _maxAttendees.round();
+    try {
+      await dio.post<Map<String, dynamic>>(
+        Endpoints.eventsCreate,
+        data: payload,
+      );
+      ref.invalidate(trendingEventsProvider);
+      ref.invalidate(nearbyEventsProvider);
+      ref.invalidate(searchEventsProvider);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Event created')),
+        );
+        context.pop();
+      }
+    } on DioException catch (e) {
+      final data = e.response?.data;
+      String msg = 'Could not create event';
+      if (data is Map && data['detail'] != null) {
+        final detail = data['detail'];
+        if (detail is String) {
+          msg = detail;
+        } else if (detail is List && detail.isNotEmpty) {
+          final first = detail.first;
+          if (first is Map && first['msg'] != null) {
+            msg = first['msg'] as String;
+            if (first['loc'] != null && first['loc'] is List) {
+              final loc = (first['loc'] as List).join('.');
+              if (loc.isNotEmpty) msg = '$loc: $msg';
+            }
+          } else {
+            msg = detail.toString();
+          }
+        } else {
+          msg = detail.toString();
+        }
+      }
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Something went wrong')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isSubmitting = false);
+    }
   }
 
   Future<void> _pickDateTime({required bool isStart}) async {
@@ -205,14 +309,11 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
                               border: Border.all(
                                 color: AppColors.primary.withValues(alpha: 0.35),
                               ),
-                              image: _pickedBanner != null
-                                  ? DecorationImage(
-                                      image: NetworkImage(_pickedBanner!.path),
-                                      fit: BoxFit.cover,
-                                    )
-                                  : null,
                             ),
-                            child: _pickedBanner == null
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(
+                                  Responsive.value(context, 18)),
+                              child: _pickedBanner == null
                                 ? Column(
                                     mainAxisAlignment: MainAxisAlignment.center,
                                     children: [
@@ -234,37 +335,58 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
                                       ),
                                     ],
                                   )
-                                : Align(
-                                    alignment: Alignment.bottomRight,
-                                    child: Padding(
-                                      padding: EdgeInsets.all(
-                                          Responsive.spacing(context, 8)),
-                                      child: Container(
-                                        padding: EdgeInsets.symmetric(
-                                          horizontal:
-                                              Responsive.value(context, 8),
-                                          vertical:
-                                              Responsive.value(context, 4),
-                                        ),
-                                        decoration: BoxDecoration(
-                                          color: Colors.black.withOpacity(0.5),
-                                          borderRadius:
-                                              BorderRadius.circular(999),
-                                        ),
-                                        child: Text(
-                                          'Change image',
-                                          style: Theme.of(context)
-                                              .textTheme
-                                              .bodySmall
-                                              ?.copyWith(color: Colors.white),
+                                : Stack(
+                                    fit: StackFit.expand,
+                                    children: [
+                                      Image(
+                                        image: imageProviderForPickedFile(_pickedBanner!),
+                                        fit: BoxFit.cover,
+                                        errorBuilder: (_, __, ___) => Container(
+                                          color: AppColors.primary.withValues(alpha: 0.12),
+                                          child: Center(
+                                            child: FaIcon(
+                                              FontAwesomeIcons.image,
+                                              size: Responsive.iconSize(context, 32),
+                                              color: AppColors.primary,
+                                            ),
+                                          ),
                                         ),
                                       ),
-                                    ),
+                                      Align(
+                                        alignment: Alignment.bottomRight,
+                                        child: Padding(
+                                          padding: EdgeInsets.all(
+                                              Responsive.spacing(context, 8)),
+                                          child: Container(
+                                            padding: EdgeInsets.symmetric(
+                                              horizontal:
+                                                  Responsive.value(context, 8),
+                                              vertical:
+                                                  Responsive.value(context, 4),
+                                            ),
+                                            decoration: BoxDecoration(
+                                              color: Colors.black.withOpacity(0.5),
+                                              borderRadius:
+                                                  BorderRadius.circular(999),
+                                            ),
+                                            child: Text(
+                                              'Change image',
+                                              style: Theme.of(context)
+                                                  .textTheme
+                                                  .bodySmall
+                                                  ?.copyWith(color: Colors.white),
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ],
                                   ),
+                            ),
                           ),
                         ),
                         SizedBox(height: Responsive.spacing(context, 20)),
                         TextFormField(
+                          controller: _titleController,
                           style: const TextStyle(color: Colors.white, fontSize: 13),
                           decoration: InputDecoration(
                             labelText: 'Title',
@@ -299,10 +421,11 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
                             ),
                           ),
                           validator: (v) =>
-                              v?.isEmpty == true ? 'Required' : null,
+                              v?.trim().isEmpty == true ? 'Required' : null,
                         ),
                         SizedBox(height: Responsive.spacing(context, 14)),
                         TextFormField(
+                          controller: _descriptionController,
                           style: const TextStyle(color: Colors.white, fontSize: 13),
                           decoration: InputDecoration(
                             labelText: 'Description',
@@ -514,6 +637,8 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
                               );
                               if (result != null) {
                                 setState(() {
+                                  _pickedLat = (result['lat'] as num?)?.toDouble();
+                                  _pickedLng = (result['lng'] as num?)?.toDouble();
                                   final address = result['address'] as String?;
                                   _locationController.text =
                                       address ?? 'Custom location selected';
@@ -667,17 +792,22 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
                         SizedBox(height: Responsive.spacing(context, 8)),
                         SizedBox(height: Responsive.spacing(context, 24)),
                         FilledButton(
-                          onPressed: () {
-                            if (_formKey.currentState?.validate() ?? false) {
-                              context.pop();
-                            }
-                          },
+                          onPressed: _isSubmitting ? null : _submitCreate,
                           style: FilledButton.styleFrom(
                             minimumSize: const Size(double.infinity, 52),
                             backgroundColor: AppColors.primaryDark,
                             foregroundColor: Colors.white,
                           ),
-                          child: const Text('Create event'),
+                          child: _isSubmitting
+                              ? const SizedBox(
+                                  height: 22,
+                                  width: 22,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: Colors.white,
+                                  ),
+                                )
+                              : const Text('Create event'),
                         ),
                       ],
                     ),

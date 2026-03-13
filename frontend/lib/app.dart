@@ -10,7 +10,7 @@ class GlobalEventsApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp.router(
-      title: 'GlobalEvents',
+      title: 'Global Gather',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light(Brightness.light),
       darkTheme: AppTheme.light(Brightness.dark),

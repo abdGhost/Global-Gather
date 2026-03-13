@@ -15,7 +15,13 @@ final trendingEventsProvider = FutureProvider.autoDispose<List<EventListItem>>((
   );
   final list = response.data;
   if (list == null) return [];
-  return list
+  final items = list
       .map((e) => EventListItem.fromJson(e as Map<String, dynamic>))
       .toList();
+  // Debug: log how many trending events came from the API.
+  // This prints to the Flutter console so you can inspect the count.
+  // Remove this when you no longer need it.
+  // ignore: avoid_print
+  print('Trending events count: ${items.length}');
+  return items;
 });

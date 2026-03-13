@@ -5,6 +5,7 @@ import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/responsive/responsive.dart';
+import '../../core/storage/app_storage.dart';
 import '../../core/theme/app_colors.dart';
 import '../../providers/onboarding_provider.dart';
 
@@ -39,7 +40,8 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
 
   void _onGetStarted() {
     ref.read(onboardingCompletedProvider.notifier).state = true;
-    context.go('/login');
+    AppStorage.setOnboardingCompleted(true);
+    context.replace('/login');
   }
 
   @override

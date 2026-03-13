@@ -5,7 +5,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/responsive/responsive.dart';
+import '../../core/storage/app_storage.dart';
 import '../../core/theme/app_colors.dart';
+import '../../providers/auth_providers.dart';
 import '../../providers/onboarding_provider.dart';
 
 class SplashScreen extends ConsumerStatefulWidget {
@@ -19,13 +21,21 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
   @override
   void initState() {
     super.initState();
-    Future.delayed(const Duration(milliseconds: 2200), () {
+    Future.delayed(const Duration(milliseconds: 2200), () async {
       if (!mounted) return;
-      final completed = ref.read(onboardingCompletedProvider);
-      if (completed) {
-        context.go('/login');
+      final token = await AppStorage.getStoredToken();
+      final onboardingDone = await AppStorage.getOnboardingCompleted();
+      if (!mounted) return;
+      ref.read(onboardingCompletedProvider.notifier).state = onboardingDone;
+      if (token != null && token.isNotEmpty) {
+        ref.read(authTokenProvider.notifier).state = token;
+        context.replace('/');
+        return;
+      }
+      if (onboardingDone) {
+        context.replace('/login');
       } else {
-        context.go('/onboarding');
+        context.replace('/onboarding');
       }
     });
   }
@@ -64,7 +74,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
               ),
               SizedBox(height: Responsive.spacing(context, 24)),
               Text(
-                'GlobalEvents',
+                'Global Gather',
                 style: Theme.of(context).textTheme.displayMedium?.copyWith(
                       color: Colors.white,
                       fontWeight: FontWeight.bold,

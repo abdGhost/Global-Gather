@@ -1,0 +1,7 @@
+# Native splash only (no in-app splash). Shows app logo before Flutter loads.
+flutter_native_splash:
+  color: "#000000"
+  image: assets/images/app_logo.png
+  android: true
+  ios: true
+  web: true

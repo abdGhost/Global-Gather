@@ -163,6 +163,25 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 child: trending.when(
                   data: (events) {
                     if (events.isEmpty) return const SizedBox.shrink();
+                    // If there is only a single trending event, just show one
+                    // large card without repeating it in a carousel. When
+                    // there are multiple events, use the carousel.
+                    if (events.length == 1) {
+                      final e = events.first;
+                      return Padding(
+                        padding: EdgeInsets.symmetric(
+                          horizontal: Responsive.horizontalPadding(context),
+                        ),
+                        child: SizedBox(
+                          height: Responsive.trendingCarouselHeight(context),
+                          child: EventCard(
+                            event: e,
+                            size: EventCardSize.large,
+                            showGoingButton: false,
+                          ),
+                        ),
+                      );
+                    }
                     return SizedBox(
                       height: Responsive.trendingCarouselHeight(context),
                       child: CarouselSlider.builder(
@@ -363,24 +382,60 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                               horizontal:
                                   Responsive.horizontalPadding(context)),
                           decoration: BoxDecoration(
-                            color: Colors.grey.shade100,
+                            color: Theme.of(context).colorScheme.surface,
                             borderRadius: BorderRadius.circular(
                                 Responsive.value(context, 16)),
-                            border: Border.all(color: Colors.grey.shade200),
+                            border: Border.all(
+                                color: Colors.white.withValues(alpha: 0.06)),
                           ),
                           child: Row(
                             children: [
-                              Icon(FontAwesomeIcons.locationCrosshairs,
-                                  size: Responsive.iconSize(context, 28),
-                                  color: Colors.grey.shade400),
+                              Container(
+                                padding: EdgeInsets.all(
+                                    Responsive.value(context, compact ? 6 : 8)),
+                                decoration: BoxDecoration(
+                                  color: AppColors.primary.withValues(alpha: 0.15),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: FaIcon(
+                                  FontAwesomeIcons.locationCrosshairs,
+                                  size: Responsive.iconSize(context, 18),
+                                  color: AppColors.primary,
+                                ),
+                              ),
                               SizedBox(width: Responsive.spacing(context, 14)),
                               Expanded(
-                                child: Text(
-                                  'Enable location to see events near you',
-                                  style: Theme.of(context)
-                                      .textTheme
-                                      .bodyMedium
-                                      ?.copyWith(color: Colors.grey.shade600),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Text(
+                                      'Enable location to see events near you',
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .bodyMedium
+                                          ?.copyWith(
+                                            color: Colors.white.withValues(
+                                              alpha: 0.86,
+                                            ),
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                    ),
+                                    SizedBox(
+                                        height:
+                                            Responsive.spacing(context, 4)),
+                                    Text(
+                                      'Turn on location services or use the map to explore nearby events.',
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .bodySmall
+                                          ?.copyWith(
+                                            color: Colors.white.withValues(
+                                              alpha: 0.7,
+                                            ),
+                                          ),
+                                    ),
+                                  ],
                                 ),
                               ),
                             ],
@@ -463,6 +518,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   child: SizedBox(height: Responsive.spacing(context, 14))),
               trending.when(
                 data: (events) {
+                  // If we have only a few events, also show them here.
+                  // When there are many, we could later slice to a true
+                  // \"this week\" subset, but for now reuse the list.
                   if (events.isEmpty) {
                     return SliverToBoxAdapter(
                       child: Padding(
@@ -473,38 +531,51 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                               vertical: Responsive.value(context, 48),
                               horizontal: Responsive.value(context, 24)),
                           decoration: BoxDecoration(
-                            color: Colors.white,
+                            color: Theme.of(context).colorScheme.surface,
                             borderRadius: BorderRadius.circular(
                                 Responsive.value(context, 20)),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withValues(alpha: 0.04),
-                                blurRadius: 12,
-                                offset: const Offset(0, 4),
-                              ),
-                            ],
+                            border: Border.all(
+                                color: Colors.white.withValues(alpha: 0.06)),
                           ),
                           child: Column(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              FaIcon(FontAwesomeIcons.calendarCheck,
-                                  size: Responsive.iconSize(context, 48),
-                                  color: Colors.grey.shade300),
+                              Container(
+                                padding: EdgeInsets.all(
+                                    Responsive.value(context, 10)),
+                                decoration: BoxDecoration(
+                                  color: AppColors.primary.withValues(alpha: 0.14),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: FaIcon(
+                                  FontAwesomeIcons.calendarCheck,
+                                  size: Responsive.iconSize(context, 26),
+                                  color: AppColors.primary,
+                                ),
+                              ),
                               SizedBox(height: Responsive.spacing(context, 16)),
                               Text(
-                                'No upcoming events',
+                                'No upcoming events this week',
                                 style: Theme.of(context)
                                     .textTheme
                                     .titleMedium
-                                    ?.copyWith(color: Colors.grey.shade600),
+                                    ?.copyWith(
+                                      color:
+                                          Colors.white.withValues(alpha: 0.9),
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                textAlign: TextAlign.center,
                               ),
                               SizedBox(height: Responsive.spacing(context, 6)),
                               Text(
-                                'Check back later or explore by category',
+                                'Try exploring by category or zooming the map to discover more.',
                                 style: Theme.of(context)
                                     .textTheme
                                     .bodySmall
-                                    ?.copyWith(color: Colors.grey),
+                                    ?.copyWith(
+                                      color:
+                                          Colors.white.withValues(alpha: 0.72),
+                                    ),
                                 textAlign: TextAlign.center,
                               ),
                             ],

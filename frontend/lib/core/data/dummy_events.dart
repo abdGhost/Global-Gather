@@ -1,7 +1,7 @@
 import '../../models/event.dart';
 
 /// Set to false when you connect the real API/backend.
-const bool useDummyData = true;
+const bool useDummyData = false;
 
 final _now = DateTime.now();
 final _utc = DateTime.utc(_now.year, _now.month, _now.day, 18, 0);
