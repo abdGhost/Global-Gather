@@ -494,40 +494,68 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                                 setState(() =>
                                                     _isRequestingLocation =
                                                         true);
-                                                final pos =
+                                                final result =
                                                     await LocationService
                                                         .requestAndGetCurrentPosition();
                                                 if (!mounted) return;
                                                 setState(() =>
                                                     _isRequestingLocation =
                                                         false);
-                                                if (pos == null) {
+                                                if (result.isSuccess &&
+                                                    result.position != null) {
+                                                  final pos = result.position!;
+                                                  ref
+                                                      .read(userLocationProvider
+                                                          .notifier)
+                                                      .state = (
+                                                    lat: pos.latitude,
+                                                    lng: pos.longitude,
+                                                  );
+                                                  await AppStorage
+                                                      .saveUserLocation(
+                                                    pos.latitude,
+                                                    pos.longitude,
+                                                  );
+                                                  return;
+                                                }
+                                                final reason =
+                                                    result.failureReason;
+                                                if (reason ==
+                                                    LocationFailureReason
+                                                        .serviceDisabled) {
+                                                  await LocationService
+                                                      .openLocationSettings();
+                                                  if (!mounted) return;
                                                   ScaffoldMessenger.of(context)
                                                       .showSnackBar(
                                                     const SnackBar(
                                                       content: Text(
-                                                          'Allow location when prompted, or turn on Location in device settings.'),
+                                                          'Turn on Location in device settings, then tap Allow location again.'),
+                                                      duration: Duration(seconds: 5),
+                                                    ),
+                                                  );
+                                                  return;
+                                                }
+                                                if (reason ==
+                                                    LocationFailureReason
+                                                        .timeoutOrError) {
+                                                  ScaffoldMessenger.of(context)
+                                                      .showSnackBar(
+                                                    const SnackBar(
+                                                      content: Text(
+                                                          'Could not get location. Ensure Location is on and try again.'),
                                                       duration: Duration(seconds: 4),
                                                     ),
                                                   );
                                                   return;
                                                 }
-                                                // Debug log: user's resolved location.
-                                                // ignore: avoid_print
-                                                print(
-                                                    'User location: lat=${pos.latitude}, lng=${pos.longitude}');
-                                                ref
-                                                    .read(userLocationProvider
-                                                        .notifier)
-                                                    .state = (
-                                                  lat: pos.latitude,
-                                                  lng: pos.longitude,
-                                                );
-                                                // Persist location so we can restore it on next app launch.
-                                                await AppStorage
-                                                    .saveUserLocation(
-                                                  pos.latitude,
-                                                  pos.longitude,
+                                                ScaffoldMessenger.of(context)
+                                                    .showSnackBar(
+                                                  const SnackBar(
+                                                    content: Text(
+                                                        'Allow location when prompted to see events near you.'),
+                                                    duration: Duration(seconds: 4),
+                                                  ),
                                                 );
                                               },
                                         style: FilledButton.styleFrom(
