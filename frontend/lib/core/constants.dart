@@ -1,5 +1,6 @@
-/// API base URL. Use env or flavor in production.
+/// API base URL. Build-time override: --dart-define=API_BASE_URL=<url>
+/// Default is the live Render API so APK/device works without passing the define.
 const String kApiBaseUrl = String.fromEnvironment(
   'API_BASE_URL',
-  defaultValue: 'http://localhost:8000',
+  defaultValue: 'https://global-events.onrender.com',
 );

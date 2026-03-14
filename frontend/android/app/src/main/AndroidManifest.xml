@@ -1,4 +1,6 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Required for API calls (e.g. Render backend). -->
+    <uses-permission android:name="android.permission.INTERNET"/>
     <application
         android:label="Global Gather"
         android:name="${applicationName}"

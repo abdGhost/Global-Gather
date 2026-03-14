@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/api/client.dart';
 import '../../../core/api/endpoints.dart';
 import '../../../core/storage/app_storage.dart';
 import '../../../core/theme/app_colors.dart';
@@ -44,15 +45,31 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
 
     setState(() => _isLoading = true);
     final dio = ref.read(apiClientProvider);
+    final email = _emailController.text.trim();
+    final password = _passwordController.text;
+
+    Future<Response<Map<String, dynamic>>> doRequest() => dio.post<Map<String, dynamic>>(
+          Endpoints.authRegister,
+          data: {'email': email, 'password': password},
+        );
 
     try {
-      final resp = await dio.post<Map<String, dynamic>>(
-        Endpoints.authRegister,
-        data: {
-          'email': _emailController.text.trim(),
-          'password': _passwordController.text,
-        },
-      );
+      Response<Map<String, dynamic>> resp;
+      try {
+        resp = await doRequest();
+      } on DioException catch (e) {
+        final isRetryable = e.type == DioExceptionType.connectionError ||
+            e.type == DioExceptionType.connectionTimeout ||
+            e.type == DioExceptionType.receiveTimeout ||
+            e.type == DioExceptionType.sendTimeout;
+        if (isRetryable && mounted) {
+          await Future<void>.delayed(const Duration(seconds: 3));
+          if (!mounted) return;
+          resp = await doRequest();
+        } else {
+          rethrow;
+        }
+      }
 
       final token = resp.data?['access_token'] as String?;
       if (token == null || token.isEmpty) {
@@ -66,34 +83,12 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
         context.replace('/');
       }
     } on DioException catch (e) {
-      String msg;
-      final data = e.response?.data;
-      if (data is Map) {
-        final detail = data['detail'];
-        if (detail is String) {
-          msg = detail;
-        } else if (detail is List && detail.isNotEmpty) {
-          final parts = <String>[];
-          for (final item in detail) {
-            if (item is Map && item['msg'] != null) {
-              parts.add(item['msg'].toString());
-            }
-          }
-          msg = parts.isEmpty ? 'Invalid input. Please check your email and password.' : parts.join(' ');
-        } else {
-          msg = e.response?.statusCode != null
-              ? 'Server error (${e.response!.statusCode}). Try again.'
-              : (e.message ?? 'Unable to sign up. Please try again.');
-        }
-      } else {
-        // No response: connection error, timeout, or unreachable (e.g. Render cold start).
-        msg = e.message ?? e.type.toString();
-        if (msg.isEmpty) msg = 'Network error. Check internet or try again in a moment.';
-      }
-
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(msg), duration: const Duration(seconds: 5)),
+          SnackBar(
+            content: Text(userMessageFromDioException(e)),
+            duration: const Duration(seconds: 5),
+          ),
         );
       }
     } catch (e) {

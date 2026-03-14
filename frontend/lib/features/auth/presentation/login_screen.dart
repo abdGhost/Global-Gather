@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/api/client.dart';
 import '../../../core/api/endpoints.dart';
 import '../../../core/storage/app_storage.dart';
 import '../../../core/theme/app_colors.dart';
@@ -40,15 +41,31 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
     setState(() => _isLoading = true);
     final dio = ref.read(apiClientProvider);
+    final email = _emailController.text.trim();
+    final password = _passwordController.text;
+
+    Future<Response<Map<String, dynamic>>> doRequest() => dio.post<Map<String, dynamic>>(
+          Endpoints.authLogin,
+          data: {'email': email, 'password': password},
+        );
 
     try {
-      final resp = await dio.post<Map<String, dynamic>>(
-        Endpoints.authLogin,
-        data: {
-          'email': _emailController.text.trim(),
-          'password': _passwordController.text,
-        },
-      );
+      Response<Map<String, dynamic>> resp;
+      try {
+        resp = await doRequest();
+      } on DioException catch (e) {
+        final isRetryable = e.type == DioExceptionType.connectionError ||
+            e.type == DioExceptionType.connectionTimeout ||
+            e.type == DioExceptionType.receiveTimeout ||
+            e.type == DioExceptionType.sendTimeout;
+        if (isRetryable && mounted) {
+          await Future<void>.delayed(const Duration(seconds: 3));
+          if (!mounted) return;
+          resp = await doRequest();
+        } else {
+          rethrow;
+        }
+      }
 
       final token = resp.data?['access_token'] as String?;
       if (token == null || token.isEmpty) {
@@ -62,14 +79,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         context.replace('/');
       }
     } on DioException catch (e) {
-      final data = e.response?.data;
-      final msg = data is Map && data['detail'] is String
-          ? data['detail'] as String
-          : 'Unable to sign in. Please check your credentials.';
-
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(msg)),
+          SnackBar(
+            content: Text(userMessageFromDioException(e)),
+            duration: const Duration(seconds: 5),
+          ),
         );
       }
     } catch (_) {
