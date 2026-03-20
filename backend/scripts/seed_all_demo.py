@@ -21,6 +21,26 @@ SCRIPTS_DIR = os.path.join(ROOT_DIR, "scripts")
 if SCRIPTS_DIR not in sys.path:
     sys.path.insert(0, SCRIPTS_DIR)
 
+
+def _load_dotenv_override() -> None:
+    """Force `backend/.env` into os.environ so seeds hit Render Postgres, not a stale shell DATABASE_URL (e.g. SQLite)."""
+    env_path = os.path.join(ROOT_DIR, ".env")
+    if not os.path.isfile(env_path):
+        return
+    with open(env_path, encoding="utf-8") as f:
+        for raw in f:
+            line = raw.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, _, value = line.partition("=")
+            key = key.strip()
+            value = value.strip().strip('"').strip("'")
+            if key:
+                os.environ[key] = value
+
+
+_load_dotenv_override()
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 

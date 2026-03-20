@@ -27,10 +27,10 @@ async def main() -> None:
         target_user = target_result.scalar_one_or_none()
 
         if old_user and target_user and old_user.id != target_user.id:
-            # Merge to existing target account: move ownership references is not needed here
-            # because profile data was attached to old_user and we want to preserve it.
-            # So instead, deactivate target_user and reuse old_user identity with new email.
+            # Free NEW_EMAIL first; otherwise both rows briefly use it and Postgres
+            # raises unique constraint on email depending on UPDATE order.
             target_user.email = f"archived+{target_user.id.hex[:8]}@globalgather.app"
+            await session.flush()
             old_user.email = NEW_EMAIL
             old_user.hashed_password = hash_password(NEW_PASSWORD)
             print("Renamed seeded user to target email and archived existing target account.")
