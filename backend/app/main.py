@@ -1,12 +1,16 @@
 """
 GlobalEvents API entrypoint.
 """
+import logging
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
 from app.database import Base, engine
 from app.routers import auth, events, me_events, rsvps, chat
+
+logger = logging.getLogger(__name__)
 
 app = FastAPI(title="GlobalEvents API", version="0.1.0")
 
@@ -23,6 +27,14 @@ async def on_startup() -> None:
   """
   async with engine.begin() as conn:
     await conn.run_sync(Base.metadata.create_all)
+
+  if settings.seed_on_empty:
+    try:
+      from app.auto_seed import seed_database_if_empty
+
+      await seed_database_if_empty()
+    except Exception:
+      logger.exception("auto_seed: failed — check logs and DATABASE_URL")
 
 
 app.add_middleware(

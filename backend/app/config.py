@@ -13,6 +13,8 @@ class Settings(BaseSettings):
     redis_url: str = "redis://localhost:6379/0"
     secret_key: str = "change-me-in-production"
     timezone_header: str = "X-Timezone"
+    # When true, if the DB has zero events on startup, run demo seed scripts (Render fresh DB).
+    seed_on_empty: bool = False
 
     class Config:
         env_file = ".env"
